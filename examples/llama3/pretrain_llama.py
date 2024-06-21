@@ -16,7 +16,7 @@ from megatron.core.datasets.gpt_dataset import MockGPTDataset, GPTDataset
 import megatron.legacy.model
 from megatron.training import pretrain
 from megatron.core.transformer.spec_utils import import_module
-from megatron.training.utils import (
+from megatron.training.core.utils import (
     get_batch_on_this_cp_rank,
     get_batch_on_this_tp_rank,
     average_losses_across_data_parallel_group
