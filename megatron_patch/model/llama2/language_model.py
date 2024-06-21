@@ -14,16 +14,48 @@
 
 import torch
 
-from megatron import get_args
+try:
+    from megatron import get_args
+except:
+    from megatron.training import get_args
+
 from megatron.core import mpu, tensor_parallel
 from megatron.core.enums import ModelType
-from megatron.model.enums import AttnMaskType
-from megatron.model.enums import LayerType
-from megatron.model.module import MegatronModule
-from megatron.model.utils import get_linear_layer
-from megatron.model.utils import init_method_normal
-from megatron.model.utils import scaled_init_method_normal
-from megatron.core.models.common.rotary_pos_embedding import RotaryEmbedding
+
+try:
+    from megatron.model.enums import AttnMaskType
+except:
+    from megatron.legacy.model.enums import AttnMaskType
+
+try:
+    from megatron.model.enums import LayerType
+except:
+    from megatron.legacy.model.enums import LayerType
+
+
+#from megatron.model.enums import AttnMaskType
+#from megatron.model.enums import LayerType
+try:
+    from megatron.model.module import MegatronModule
+except:
+    from megatron.legacy.model.module import MegatronModule
+try:
+    from megatron.model.utils import get_linear_layer
+except:
+    from megatron.legacy.model.utils import get_linear_layer
+try:
+    from megatron.model.utils import init_method_normal
+except:
+    from megatron.legacy.model.utils import init_method_normal
+try:
+    from megatron.model.utils import scaled_init_method_normal
+except:
+     from megatron.legacy.model.utils import scaled_init_method_normal
+try:
+    from megatron.core.models.common.rotary_pos_embedding import RotaryEmbedding
+except:
+    from megatron.core.models.common.embeddings.rotary_pos_embedding import RotaryEmbedding
+
 
 from .transformer import ParallelTransformer
 
@@ -380,10 +412,17 @@ class TransformerLanguageModel(MegatronModule):
             # partial rotary embeddings, which is better than full rotary
             # Wang and Komatsuzaki et al
             # https://github.com/kingoflolz/mesh-transformer-jax/
-            self.rotary_pos_emb = RotaryEmbedding(
-                rotary_dim,
-                seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor
-            )
+            try:
+                self.rotary_pos_emb = RotaryEmbedding(
+                    rotary_dim,
+                    seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor
+                )
+            except:
+                self.rotary_pos_emb = RotaryEmbedding(
+                    rotary_dim,
+                    seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor,
+                    rotary_percent=args.rotary_percent
+                )
             self.use_rotary_position_embeddings = True
         elif args.use_llama2_rotary_position_embeddings:
             self.use_rotary_position_embeddings = False

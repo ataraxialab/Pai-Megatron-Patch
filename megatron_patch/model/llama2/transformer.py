@@ -19,15 +19,39 @@ import torch
 import torch.nn.functional as F
 from typing import Optional
 
-from megatron import get_timers, get_args, get_retro_args, core, get_num_microbatches
-from megatron.model.module import MegatronModule
+try:
+    from megatron import get_timers, get_args, get_retro_args, get_num_microbatches
+except:
+    from megatron.training import get_timers, get_args, get_num_microbatches
+from megatron import core
+try:
+    from megatron.model.module import MegatronModule
+except:
+    from megatron.legacy.model.module import MegatronModule
 from megatron.core import mpu, tensor_parallel
 from megatron.core.enums import ModelType
-from megatron.model.enums import AttnMaskType, LayerType, AttnType
-from megatron.model.fused_softmax import FusedScaleMaskSoftmax
-from megatron.model.fused_bias_gelu import bias_gelu_impl
-from megatron.core.models.common.rotary_pos_embedding import apply_rotary_pos_emb
-from megatron.model.utils import attention_mask_func, openai_gelu, erf_gelu, get_norm
+try:
+    from megatron.model.enums import AttnMaskType, LayerType, AttnType
+except:
+    from megatron.legacy.model.enums import AttnMaskType, LayerType, AttnType
+try:
+    from megatron.model.fused_softmax import FusedScaleMaskSoftmax
+except:
+    from megatron.core.fusions.fused_softmax import FusedScaleMaskSoftmax
+try:
+    from megatron.model.fused_bias_gelu import bias_gelu_impl
+except:
+    from megatron.core.fusions.fused_bias_gelu import bias_gelu_impl
+try: 
+    from megatron.core.models.common.rotary_pos_embedding import apply_rotary_pos_emb
+except:
+    from megatron.core.models.common.embeddings.rotary_pos_embedding import apply_rotary_pos_emb
+
+try:
+    from megatron.model.utils import attention_mask_func, openai_gelu, erf_gelu, get_norm
+except:
+    from megatron.legacy.model.utils import attention_mask_func, openai_gelu, erf_gelu, get_norm
+
 from megatron.core.tensor_parallel import gather_from_sequence_parallel_region_to_moe, reduce_scatter_to_sequence_parallel_region_from_moe
 from megatron.core.parallel_state import get_tensor_model_parallel_group, get_tensor_and_data_parallel_group
 
@@ -518,6 +542,7 @@ class ParallelAttention(MegatronModule):
                  attn_mask_type=AttnMaskType.padding):
         super(ParallelAttention, self).__init__()
         args = get_args()
+        self.config = config
         self.layer_number = max(1, layer_number)
         self.attention_type = attention_type
         self.attn_mask_type = attn_mask_type
@@ -845,8 +870,12 @@ class ParallelAttention(MegatronModule):
             # apply relative positional encoding (rotary embedding)
             if rotary_pos_emb is not None:
                 q_pos_emb, k_pos_emb = rotary_pos_emb
-                query_layer = apply_rotary_pos_emb(query_layer, q_pos_emb)
-                key_layer = apply_rotary_pos_emb(key_layer, k_pos_emb)
+                try:
+                    query_layer = apply_rotary_pos_emb(query_layer, q_pos_emb)
+                    key_layer = apply_rotary_pos_emb(key_layer, k_pos_emb)
+                except:
+                    query_layer = apply_rotary_pos_emb(query_layer, q_pos_emb, self.config)
+                    key_layer = apply_rotary_pos_emb(key_layer, k_pos_emb, self.config)
                 # TODO, can apply positional embedding to value_layer so it has
                 # absolute positional embedding.
                 # otherwise, only relative positional embedding takes effect
@@ -975,6 +1004,7 @@ class ParallelTransformerLayer(MegatronModule):
                 nullcontext if use_nvfuser else torch.enable_grad
 
         if args.retro_add_retriever:
+            import get_retro_args
             retro_args = get_retro_args()
             self.retro_num_neighbors = args.retro_num_neighbors
             self.retro_chunk_length = retro_args.retro_gpt_chunk_length
