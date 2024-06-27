@@ -1,3 +1,72 @@
+## 从MAP_CC 生成训练数据集
+MAP_CC 包含了几个不同的gz的压缩包，按照要求第一步要将gz的压缩包做合并
+利用以下的脚本
+```shell 
+split=zh_cc.jsonl
+#split=zh_books.jsonl
+#split=zh_papers.jsonl
+#split=zh_baike.jsonl
+#split=zh_other.jsonl
+cat $split.gz.part* > /workspace/mnt/storage/zhaozhijian@supremind.com/FS4T2/MAP_CC/$split.gz
+~  
+```
+第二步，将.gz 的压缩包完成解压
+```shell
+zcat zh_**.gz > $OUTPUTPATH/zh_**.jsonl
+```
+
+第三步：将jsonl 的数据做分片压缩，为了后续的并行处理,脚本参考split_part.sh,运行成功后会在`cleaned_zst`下生成若干个.zst 结尾的文件.
+```shell
+# 此处设置分块数为10，如数据处理慢可设置稍大
+# split_part.sh
+
+NUM_PIECE=10
+
+dataset_dir=/workspace/mnt/storage/zhaozhijian@supremind.com/FS4T2/MAP_CC/
+jsonl_name=zh_baike.jsonl
+
+# 对merged_wudao_cleaned.json文件进行处理
+mkdir -p ${dataset_dir}/cleaned_zst/
+# 查询数据总长度，对数据进行拆分
+NUM=$(sed -n '$=' ${dataset_dir}/${jsonl_name})
+echo "total line of dataset is $NUM, data will be split into $NUM_PIECE pieces for processing"
+NUM=`expr $NUM / $NUM_PIECE`
+echo "each group is processing $NUM sample"
+split_dir=${dataset_dir}/split
+mkdir $split_dir
+split -l $NUM --numeric-suffixes --additional-suffix=.jsonl ${dataset_dir}/${jsonl_name}$split_dir/
+
+# 数据压缩
+o_path=${dataset_dir}/cleaned_zst/
+mkdir -p $o_path
+files=$(ls $split_dir/*.jsonl)
+for filename in $files
+do
+   f=$(basename $filename)
+   zstd -z $filename -o $o_path/$f.zst &
+done
+rm -rf $split_dir
+#rm ${dataset_dir}/wudao/merged_wudao_cleaned.json
+```
+第四步：生成最终的数据,参考`make_mmap.sh` 修改一些配置
+```shell
+export dataset_dir=/workspace/mnt/storage/zhaozhijian@supremind.com/FS4T2/MAP_CC
+export WORK_DIR=/workspace
+
+bash run_make_pretraining_dataset.sh \
+/workspace/Pai-Megatron-Patch \  #megatron 路径
+${dataset_dir}/cleaned_zst/ \  # zst 文件路径
+llamabpe \  #token type
+${dataset_dir}/ \  # 输出路径
+../..//llama3-ckpts/Meta-Llama-3-8B \  # 分词器的路径
+16 # 分成多少份
+```
+
+
+
+
+
+
 ## 数据预处理
 建议在PAI灵骏智算服务中的DSW实例中准备预训练数据，以下以中文wudao2.0数据集的准备流程为例，给出数据预处理指引：
 下载WuDaoCorpora2.0开源数据集到/mnt/workspace/llama3-datasets工作目录下，我们提供了部分样例数据作为示例，用户可通过以下命令下载和解压：
