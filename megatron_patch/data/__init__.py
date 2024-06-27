@@ -26,6 +26,7 @@ from .qwen_vl import LazySupervisedDataset as QwenVLSupervisedDataset
 from .glm import ChatGLMRawDataset
 from .starcoder import StarcoderRawDataset
 
+
 def build_evaluation_dataset(dataset):
 
     args = get_args()
@@ -35,6 +36,7 @@ def build_evaluation_dataset(dataset):
         return val_dataset
     else:
         raise NotImplementedError('dataset {} is not implemented.'.format(dataset))
+
 
 def build_finetune_dataset(dataset):
 
@@ -76,6 +78,7 @@ def build_finetune_dataset(dataset):
     else:
         raise NotImplementedError('dataset {} is not implemented.'.format(dataset))
 
+
 def build_pretrain_dataset_from_original(dataset):
 
     args = get_args()
@@ -114,13 +117,13 @@ def build_pretrain_dataset_from_original(dataset):
 
 
 def build_pretrain_dataset_from_idxmap(data_prefix,
-                                              max_padding_length,
-                                              dataset_type,
-                                              splits_string,
-                                              train_valid_test_num_samples,
-                                              seed,
-                                              skip_warmup,
-                                              return_doc_ids=False):
+                                        max_padding_length,
+                                        dataset_type,
+                                        splits_string,
+                                        train_valid_test_num_samples,
+                                        seed,
+                                        skip_warmup,
+                                        return_doc_ids=False):
     """
     Build train, valid, and test datasets for pretraining a LLAMA model on mmap format data.
     Args:
@@ -184,6 +187,7 @@ def build_pretrain_dataset_from_idxmap(data_prefix,
     return (blending_train_dataset, blending_valid_dataset,
             blending_test_dataset)
 
+
 def _build_train_valid_test_datasets(data_prefix, max_padding_length, dataset_type, splits_string,
                                      train_valid_test_num_samples,
                                      seed, skip_warmup,
@@ -192,10 +196,18 @@ def _build_train_valid_test_datasets(data_prefix, max_padding_length, dataset_ty
         from megatron.data.gpt_dataset import get_indexed_dataset_
         from megatron.data.gpt_dataset import get_train_valid_test_split_
     except:
-        from megatron.data.dataset_utils import get_indexed_dataset_
-        from megatron.data.dataset_utils import get_train_valid_test_split_
+        try:
+            from megatron.data.dataset_utils import get_indexed_dataset_
+            from megatron.data.dataset_utils import get_train_valid_test_split_
+        except:
+            from .legacy_dataset_utils import get_indexed_dataset_
+            from .legacy_dataset_utils import get_train_valid_test_split_
     # Indexed dataset.
-    indexed_dataset = get_indexed_dataset_(data_prefix, skip_warmup)
+    try:
+        indexed_dataset = get_indexed_dataset_(data_prefix, skip_warmup)  
+    except:
+        indexed_dataset = get_indexed_dataset_(data_prefix, dataset_type, skip_warmup)
+
     try:
         total_num_of_documents = indexed_dataset.sizes.shape[0]
     except:

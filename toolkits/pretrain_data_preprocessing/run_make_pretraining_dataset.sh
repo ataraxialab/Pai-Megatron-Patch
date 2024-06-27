@@ -7,7 +7,7 @@ input_data_dir=$2
 tokenizer=$3
 output_data_dir=$4
 load_dir=$5
-
+nparts=$6
 INPUT="${input_data_dir}"
 
 
@@ -65,11 +65,12 @@ elif [ $tokenizer = "llamabpe" ]; then
 
   python preprocess_data.py \
   --input ${INPUT} \
-  --output-prefix ${output_data_dir}/wudao_llama3bpe \
+  --output-prefix ${output_data_dir}/llama3bpe \
   --dataset-impl mmap \
   --patch-tokenizer-type LLamaTokenizer \
   --load ${load_dir} \
   --workers 16 \
+  --split-parts ${nparts}\
   --append-eod
 
 elif [ $tokenizer = "falconbpe" ]; then

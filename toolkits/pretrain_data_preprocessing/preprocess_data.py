@@ -30,6 +30,24 @@ from megatron_patch.tokenizer import build_tokenizer
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
+def clean_text(raw):
+    import re
+    httpcom = re.compile(
+        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@'
+        r'.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')  # 匹配模式
+    raw = httpcom.sub('', raw)
+
+    space = re.compile(r' +')
+    raw = space.sub(' ', raw)
+
+    fil = re.compile(
+        u'[^0-9a-zA-Z\u4e00-\u9fa5.， ,\\-。%'
+        u'《*》/•、&＆(—)（+）：？!！“”·]+', re.UNICODE)
+    raw = fil.sub('', raw)
+    return raw.strip()
+
+
+
 class Encoder(object):
     def __init__(self, args):
         self.args = args
@@ -41,16 +59,22 @@ class Encoder(object):
     def encode(self, text):
         if self.args.ftfy:
             text = ftfy.fix_text(text)
+        text = clean_text(text)
         ids = {}
+        #print(text)
         for key in self.args.jsonl_keys:
             doc_ids = []
             try:
-                text_ids = Encoder.tokenizer(text, add_special_tokens=False)['input_ids']
-                """
-                text_ids = Encoder.tokenizer(text, add_special_tokens=False, padding='max_length',
-                                             max_length=2047, truncation=True)['input_ids']
-                """
+                #text_ids = Encoder.tokenizer(text, add_special_tokens=False)['input_ids']
+                
+                text_ids = Encoder.tokenizer(text, add_special_tokens=False, 
+                                             max_length=Encoder.tokenizer.model_max_length-1, truncation=True)['input_ids']
+                
                 if max(text_ids) >= Encoder.tokenizer.vocab_size:
+                    print(text)
+                    print(max(text_ids))
+                    continue
+                if len(text_ids) >= Encoder.tokenizer.model_max_length:
                     print(text)
                     print(max(text_ids))
                     continue
@@ -58,15 +82,10 @@ class Encoder(object):
                 continue
             if len(text_ids) > 0:
                 doc_ids.append(text_ids)
-            if self.args.append_eod:
-                if hasattr(Encoder.tokenizer, 'eos_token_id'):
-                    doc_ids[-1].append(Encoder.tokenizer.eos_token_id)
-                elif hasattr(Encoder.tokenizer, 'eod_id'):
-                    doc_ids[-1].append(Encoder.tokenizer.eod_id)
-                else:
+                if self.args.append_eod:
                     doc_ids[-1].append(Encoder.tokenizer.eod)
                 #doc_ids[-1].append(Encoder.tokenizer.pad_token_id)
-            ids[key] = doc_ids
+                ids[key] = doc_ids
         return ids, len(text)
 
 def get_args():
@@ -155,6 +174,10 @@ def get_args():
                        type=int,
                        default=1,
                        help='extra_vocab_size')
+    group.add_argument('--split-parts',
+                       type=int,
+                       default=1,
+                       help='split_parts')
     args = parser.parse_args()
     args.keep_empty = False
 
@@ -186,8 +209,15 @@ def main():
     args.vocab_extra_ids = 0
     encoder = Encoder(args)
     tokenizer = build_tokenizer(args)
+
+    nparts = args.split_parts
     print(f'Vocab size: {tokenizer.vocab_size}')
     print(f'Output prefix: {args.output_prefix}')
+
+    outdic = args.output_prefix[:args.output_prefix.rindex('/')]
+
+    if not os.path.exists(outdic):
+        os.mkdir(outdic)
 
     semaphore = Semaphore(10000 + args.workers)
 
@@ -204,18 +234,26 @@ def main():
         encoder.initializer()
         encoded_docs = (encoder.encode(doc) for doc in fin)
 
-    output_bin_files = {}
-    output_idx_files = {}
-    builders = {}
-    for key in args.jsonl_keys:
-        output_bin_files[key] = '{}_{}_{}.bin'.format(args.output_prefix, key,
-                                                      'document')
-        output_idx_files[key] = '{}_{}_{}.idx'.format(args.output_prefix, key,
-                                                      'document')
-        builders[key] = indexed_dataset.MMapIndexedDatasetBuilder(
-            output_bin_files[key],
-            dtype=indexed_dataset.DType.optimal_dtype(tokenizer.vocab_size),
-        )
+    output_bin_files_all = []
+    output_idx_files_all = []
+    builders_all = []
+        
+    for idx in range(nparts):
+        output_bin_files = {}
+        output_idx_files = {}
+        builders = {}
+        for key in args.jsonl_keys:
+            output_bin_files[key] = '{}_{}_{}_{}.bin'.format(args.output_prefix, idx, key,
+                                                        'document')
+            output_idx_files[key] = '{}_{}_{}_{}.idx'.format(args.output_prefix, idx, key,
+                                                        'document')
+            builders[key] = indexed_dataset.MMapIndexedDatasetBuilder(
+                output_bin_files[key],
+                dtype=indexed_dataset.DType.optimal_dtype(tokenizer.vocab_size),
+            )
+        output_bin_files_all.append(output_bin_files)
+        output_idx_files_all.append(output_idx_files)
+        builders_all.append(builders)
 
     # actually do tokenization
     proc_start = time.time()
@@ -226,6 +264,7 @@ def main():
 
         semaphore.release()
 
+        builders = builders_all[i%nparts]
         # add each tokenized document / sentence
         for key, sentences in doc.items():
             for sentence in sentences:
@@ -244,8 +283,9 @@ def main():
                 pbar.update(args.log_interval)
 
     # save output file
-    for key in args.jsonl_keys:
-        builders[key].finalize(output_idx_files[key])
+    for idx in range(nparts):
+        for key in args.jsonl_keys:
+            builders_all[idx][key].finalize(output_idx_files_all[idx][key])
 
 
 if __name__ == '__main__':

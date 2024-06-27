@@ -10,10 +10,9 @@ SOURCE_CKPT_PATH=$2
 TARGET_CKPT_PATH=$3
 TP=$4
 PP=$5
-EP=$6
-USE_TE=$7
-MG2HF=$8
-HF_CKPT_PATH=$9
+USE_TE=$6
+MG2HF=$7
+HF_CKPT_PATH=$8
 
 CURRENT_DIR="$( cd "$( dirname "$0" )" && pwd )"
 MEGATRON_PATH=$( dirname $(dirname $( dirname ${CURRENT_DIR})))
@@ -70,7 +69,7 @@ NUM_KEY_VALUE_HEADS=4
 RMS_NORM_EPS=1e-6
 ROPE_THETA=1000000
 SLIDING_WINDOW=131072
-EXTRA_VOCAB_SIZE=421
+EXTRA_VOCAB_SIZE=293
 
 moe_options=" \
             "
@@ -93,35 +92,6 @@ EXTRA_VOCAB_SIZE=421
 
 moe_options=" \
             "
-cpu_options=" \
-            --use-cpu-initialization"
-
-elif [ $MODEL_SIZE = A14B ]; then
-
-HIDDEN_SIZE=3584
-INTERMEDIATE_SIZE=18944
-MAX_POSITION_EMBEDDINGS=131072
-MAX_WINDOW_LAYERS=28
-MOE_INTERMEDIATE_SIZE=2560
-NUM_ATTENTION_HEADS=28
-NUM_EXPERTS=64
-NUM_EXPERTS_PER_TOPK=8
-NUM_HIDDEN_LAYERS=28
-NUM_KEY_VALUE_HEADS=4
-RMS_NORM_EPS=1e-6
-ROPE_THETA=1000000
-SHARED_EXPERT_INTERMEDIATE_SIZE=20480
-SLIDING_WINDOW=131072
-EXTRA_VOCAB_SIZE=293
-
-moe_options=" \
-            --moe-router-topk ${NUM_EXPERTS_PER_TOPK} \
-            --num-experts ${NUM_EXPERTS} \
-            --target-expert-model-parallel-size ${EP}\
-            --moe-ffn-hidden-size ${MOE_INTERMEDIATE_SIZE} \
-            --shared-moe-ffn-hidden-size ${SHARED_EXPERT_INTERMEDIATE_SIZE} \
-            --enable-shared-expert"
-
 cpu_options=" \
             --use-cpu-initialization"
 
@@ -151,11 +121,11 @@ fi
 
 DISTRIBUTED_ARGS="--nproc_per_node 1 --nnodes 1 --node_rank 0 --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
 
-torchrun ${DISTRIBUTED_ARGS} hf2mcore_qwen2_dense_and_moe_gqa.py \
+torchrun ${DISTRIBUTED_ARGS} hf2mcore_qwen2_dense_gqa.py \
     --load ${SOURCE_CKPT_PATH} \
     --save ${TARGET_CKPT_PATH} \
     --target-tensor-model-parallel-size ${TP} \
-    --target-pipeline-model-parallel-size ${PP} \
+    --pipeline-model-parallel-size ${PP} \
     --micro-batch-size 1 \
     --save-interval 1 \
     --bf16 \
