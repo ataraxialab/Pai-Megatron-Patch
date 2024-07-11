@@ -510,6 +510,14 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed(barrier=True)
         elapsed_time_per_iteration = elapsed_time / total_iterations
+        
+        #===tgs
+        seq_len = args.seq_length
+        batch_size = args.micro_batch_size * get_num_microbatches() * args.data_parallel_size
+        samples_per_second = batch_size/elapsed_time_per_iteration
+        tokens_per_second = samples_per_second * seq_len
+        tokens_per_gpu_per_second = tokens_per_second/args.world_size
+        
         if writer:
             if args.log_timers_to_tensorboard:
                 writer.add_scalar('iteration-time',
@@ -522,6 +530,8 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             elapsed_time_per_iteration * 1000.0)
         log_string += ' learning rate: {:.3E} |'.format(learning_rate)
         log_string += ' global batch size: {:5d} |'.format(batch_size)
+        
+        log_string += ' tokens per gpu per second (tgs): {:.3f}'.format(tokens_per_gpu_per_second)
         for key in total_loss_dict:
             if key not in [advanced_iters_key, skipped_iters_key,
                            nan_iters_key]:
