@@ -17,13 +17,23 @@ import torch
 import os
 
 from megatron.core.enums import ModelType
-from megatron.utils import get_ltor_masks_and_position_ids
-from megatron.arguments import core_transformer_config_from_args
-from megatron import get_args
-from megatron import get_timers
-from megatron.core import tensor_parallel
-from megatron.utils import average_losses_across_data_parallel_group
+try:
+    from megatron.utils import get_ltor_masks_and_position_ids
+except:
+    from megatron.training.utils import get_ltor_masks_and_position_ids
+try:
+    from megatron.arguments import core_transformer_config_from_args
+except:
+    from megatron.training.arguments import core_transformer_config_from_args
 
+from megatron.training import get_args
+from megatron.training import get_timers
+from megatron.core import tensor_parallel
+try:
+    from megatron.utils import average_losses_across_data_parallel_group
+except:
+    from megatron.training.utils import average_losses_across_data_parallel_group
+     
 from megatron_patch.data import \
     build_pretrain_dataset_from_original, build_pretrain_dataset_from_idxmap
 from megatron_patch.model.llama2.gpt_model import GPTModel
@@ -106,6 +116,7 @@ def train_valid_test_datasets_provider(train_val_test_num_samples):
         train_ds, valid_ds, test_ds = \
             build_pretrain_dataset_from_original(args.dataset)
     else:
+        args.mmap_warmup  = False
         train_ds, valid_ds, test_ds = \
             build_pretrain_dataset_from_idxmap(
                 data_prefix=args.train_data_path,
