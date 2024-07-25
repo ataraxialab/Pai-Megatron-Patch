@@ -2,22 +2,22 @@
 set -e
 ENV=$1
 MEGATRON_PATCH_PATH=$2
-MEGATRON_PATH=${MEGATRON_PATCH_PATH}/Megatron-LM-231007
+MEGATRON_PATH=${MEGATRON_PATCH_PATH}/Megatron-LM-240612
 export PYTHONPATH=${MEGATRON_PATH}:${MEGATRON_PATCH_PATH}:$PYTHONPATH
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 if [ $ENV = dsw ]; then
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 MASTER_ADDR=localhost
 MASTER_PORT=$(shuf -n 1 -i 10000-65535)
 NNODES=1
 NODE_RANK=0
-GPUS_PER_NODE=8
+GPUS_PER_NODE=4
 
 elif [ $ENV = dlc ]; then
-
-NNODES=${WORLD_SIZE}
-NODE_RANK=${RANK}
-GPUS_PER_NODE=${KUBERNETES_CONTAINER_RESOURCE_GPU}
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+NNODES=$WORLD_SIZE
+NODE_RANK=$RANK
+GPUS_PER_NODE=4
 
 fi
 
@@ -160,7 +160,6 @@ megatron_options="  \
         --save ${SAVED_PRETRAIN_CHECKPOINT_PATH} \
         --split 99,1,0 \
         --train-data-path ${DATASET_PATH} \
-        --data-path ${DATASET_PATH} \
         --lr ${LR} \
         --min-lr ${MIN_LR} \
         --lr-decay-style linear \

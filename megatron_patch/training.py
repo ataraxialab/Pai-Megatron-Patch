@@ -17,22 +17,45 @@ import sys
 import time
 
 import torch
-from megatron import (get_args, get_num_microbatches, get_signal_handler,
+try:
+    from megatron import (get_args, get_num_microbatches, get_signal_handler,
+                      get_tensorboard_writer, get_timers, is_last_rank,
+                      print_rank_0, print_rank_last, update_num_microbatches)
+except:
+    from megatron.training import (get_args, get_num_microbatches, get_signal_handler,
                       get_tensorboard_writer, get_timers, is_last_rank,
                       print_rank_0, print_rank_last, update_num_microbatches)
 
 from megatron.core import mpu, tensor_parallel
-from megatron.initialize import (set_jit_fusion_options,
+try:
+    from megatron.initialize import (set_jit_fusion_options,
+                                    write_args_to_tensorboard)
+except:
+    from megatron.training.initialize import (set_jit_fusion_options,
                                  write_args_to_tensorboard)
-
-from megatron.model import Float16Module
-from megatron.training import (build_train_valid_test_data_iterators,
+try:
+    from megatron.model import Float16Module
+except:
+    from megatron.legacy.model import Float16Module
+try:
+    from megatron.training import (build_train_valid_test_data_iterators,
+                                get_optimizer_param_scheduler,
+                                setup_model_and_optimizer,
+                                print_datetime)
+except:
+    from megatron.training.training import (build_train_valid_test_data_iterators,
                                get_optimizer_param_scheduler,
                                setup_model_and_optimizer,
                                print_datetime)
-from megatron.utils import (calc_params_l2_norm,
-                            check_adlr_autoresume_termination, report_memory,
-                            unwrap_model)
+try:    
+    from megatron.utils import (calc_params_l2_norm,
+                                check_adlr_autoresume_termination, report_memory,
+                                unwrap_model)
+except:
+    from megatron.training.utils import (calc_params_l2_norm,
+                                check_adlr_autoresume_termination, report_memory,
+                                unwrap_model)
+
 from megatron.core.pipeline_parallel.schedules import get_forward_backward_func
 from megatron.core.enums import ModelType
 from megatron.core.utils import get_model_config
@@ -40,10 +63,15 @@ try:
     from megatron.core import DistributedDataParallel as DDP
 except:
     from megatron.model import DistributedDataParallel as DDP
+try:
+    from megatron.model.vision.knn_monitor import compute_feature_bank
+except:
+    from megatron.legacy.model.vision.knn_monitor import compute_feature_bank
 
-from megatron.model.vision.knn_monitor import compute_feature_bank
-from megatron.checkpointing import load_checkpoint, save_checkpoint
-
+try:
+    from megatron.checkpointing import load_checkpoint, save_checkpoint
+except:
+    from megatron.training.checkpointing import load_checkpoint, save_checkpoint
 # The earliest we can measure the start time.
 _TRAIN_START_TIME = time.time()
 
@@ -85,8 +113,10 @@ def pretrain(train_valid_test_dataset_provider,
         args_defaults: a dictionary from argument-name to argument-value. It
             to set already parse arguments.
     """
-
-    from megatron.initialize import initialize_megatron
+    try:
+        from megatron.initialize import initialize_megatron
+    except:
+        from megatron.training.initialize import initialize_megatron
     initialize_megatron(extra_args_provider=extra_args_provider,
                         args_defaults=args_defaults)
 
@@ -341,7 +371,12 @@ def train_step(forward_step_func, data_iterator,
 
     # Update parameters.
     timers('optimizer', log_level=1).start(barrier=args.barrier_with_L1_time)
-    update_successful, grad_norm, num_zeros_in_grad = optimizer.step(args, timers)
+    #print(type(optimizer))
+    #exit()
+    try:
+        update_successful, grad_norm, num_zeros_in_grad = optimizer.step(args, timers)
+    except:
+        update_successful, grad_norm, num_zeros_in_grad = optimizer.step()
     timers('optimizer').stop()
 
     try:
